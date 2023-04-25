@@ -1,0 +1,6 @@
+.idea
+vendor
+etc/local.env
+etc/development.env
+etc/production.env
+docs

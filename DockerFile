@@ -1,0 +1,33 @@
+# First stage: builder.
+FROM golang:1.17 AS builder
+
+# Set timezone
+ENV TZ=Asia/Jakarta
+
+# Copy go.mod for caching
+COPY go.mod /go/src/go-dts/
+COPY go.sum /go/src/go-dts/
+
+# Set working directory
+WORKDIR /go/src/go-dts/
+RUN go mod download
+COPY . .
+
+# Build the app
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/main -ldflags="-s -w -X main.LdFlags=$(git describe --tags --always)/$(date --iso-8601=second)" ./cmd/main
+
+# Second stage: run the binary.
+FROM alpine
+
+# Set timezone
+RUN apk add --no-cache tzdata
+ENV TZ=Asia/Jakarta
+
+# Copy
+COPY --from=builder /go/src/go-dts/build/main .
+COPY etc etc
+
+# Expose port, must match with the .env configuration
+EXPOSE 8080
+
+ENTRYPOINT [ "./main" ]
