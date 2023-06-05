@@ -8,7 +8,6 @@ import (
 	"github.com/lactobasilusprotectus/go-template/pkg/auth/common"
 	"github.com/lactobasilusprotectus/go-template/pkg/common/general"
 	"github.com/lactobasilusprotectus/go-template/pkg/domain"
-	"github.com/lactobasilusprotectus/go-template/pkg/util/cache"
 	httputil "github.com/lactobasilusprotectus/go-template/pkg/util/http"
 	"github.com/lactobasilusprotectus/go-template/pkg/util/jwt"
 )
@@ -105,13 +104,16 @@ func (a *AuthUseCase) GetUserIDFromCtx(ctx context.Context) (userID int64, ok bo
 // check for invalidated token in cache
 func (a *AuthUseCase) isSessionInvalidated(sessionID string) (invalidated bool, err error) {
 	cacheKey := invalidSessionCacheKey(sessionID)
-	cacheVal, err := cache.String(a.redis.Get(cacheKey))
+
+	//validate redis string
+
+	cacheVal, err := a.redis.Get(cacheKey)
 	if cacheVal == common.SessionInvalidated {
 		return true, nil
 	}
 
 	// cache return err other than ErrNilReturned
-	if !errors.Is(err, cache.ErrNilReturned) {
+	if err != nil {
 		return false, fmt.Errorf("isSessionInvalidated err: %+v", err)
 	}
 

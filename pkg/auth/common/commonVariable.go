@@ -21,6 +21,12 @@ const (
 	SessionInvalidated = "1"
 )
 
+// A list of task types.
+const (
+	TypeWelcomeEmail  = "email:welcome"
+	TypeReminderEmail = "email:reminder"
+)
+
 type LoginToken struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`

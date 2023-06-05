@@ -9,10 +9,12 @@ import (
 	"github.com/lactobasilusprotectus/go-template/pkg/domain"
 	rootDelivery "github.com/lactobasilusprotectus/go-template/pkg/root/delivery"
 	userRepository "github.com/lactobasilusprotectus/go-template/pkg/user/repository"
+	"github.com/lactobasilusprotectus/go-template/pkg/util/cronjob"
 	"github.com/lactobasilusprotectus/go-template/pkg/util/db"
 	_ "github.com/lactobasilusprotectus/go-template/pkg/util/http"
 	httputil "github.com/lactobasilusprotectus/go-template/pkg/util/http"
 	"github.com/lactobasilusprotectus/go-template/pkg/util/jwt"
+	"github.com/lactobasilusprotectus/go-template/pkg/util/queue"
 	"github.com/lactobasilusprotectus/go-template/pkg/util/redis"
 	"log"
 	"os"
@@ -44,14 +46,14 @@ func main() {
 	// Read env file
 	cfg, err := config.Read(config.GetFilePath(env))
 
+	if err != nil {
+		return
+	}
+
 	//swagger info
 	docs.SwaggerInfo.Title = cfg.Title
 	docs.SwaggerInfo.Description = cfg.Description
 	docs.SwaggerInfo.Host = cfg.URL
-
-	if err != nil {
-		return
-	}
 
 	// Init utils: http server, db connection, etc.
 	utils := initUtils(cfg)
@@ -62,12 +64,18 @@ func main() {
 		log.Fatalln("initRepoAndUseCases err:", err)
 	}
 
-	// Init delivery layer (HTTP)
+	// Init, Register, Start delivery layer (HTTP)
 	httpHandler := initHttpHandler(utils, uc, env)
-
-	// Start serving
 	registerHttpHandler(utils.HttpServer, httpHandler)
 	utils.HttpServer.Run(env)
+
+	// init, register, and start cron
+	registerCron(utils.Cron, uc)
+	utils.Cron.Start()
+
+	// Start serving
+	registerQueue(utils.AsynqServer, uc)
+	utils.AsynqServer.Run()
 
 	// =======================================================
 
@@ -84,6 +92,8 @@ func main() {
 	// Doesn't block if no connections, but will otherwise wait
 	// until the timeout deadline.
 	utils.HttpServer.Stop()
+	utils.AsynqServer.Stop()
+	utils.Cron.Stop()
 
 	log.Println("shutting down...")
 	os.Exit(0)
@@ -112,12 +122,18 @@ func initUtils(cfg config.Config) AppUtil {
 	// JWT implementation
 	jwtModule := jwt.New(timeModule)
 
+	//queue
+	asynq := queue.NewClient(cfg.Redis)
+
 	return AppUtil{
 		HttpServer:   httputil.NewServer(cfg.Http),
 		DbConnection: dbConn,
 		Redis:        redisClient,
 		Jwt:          jwtModule,
 		Time:         timeModule,
+		Asynq:        asynq,
+		AsynqServer:  queue.NewAsynqServer(cfg.Redis),
+		Cron:         cronjob.NewCron(),
 	}
 }
 
@@ -143,7 +159,7 @@ func initRepoAndUseCases(util AppUtil, cfg config.Config) (repo AppRepo, uc AppU
 
 // registerHttpHandler registers our handlers to the http server.
 // reflect docs: https://golang.org/pkg/reflect/.
-// The purpose of this function is to register HTTP request handlers to an httputil.Server object based on the fields of the handlers object.
+// The purpose of this function is to register HTTP request handlers to httputil.Server object based on the fields of the handlers object.
 func registerHttpHandler(srv *httputil.Server, handlers AppHttpHandler) {
 	h := reflect.ValueOf(handlers)
 
@@ -167,6 +183,34 @@ func registerModels(dbConn *db.DatabaseConnection, models AppModels) {
 	}
 }
 
+// registerCron registers our use cases as cron handler
+// reflect docs: https://golang.org/pkg/reflect/
+func registerCron(c *cronjob.Cron, uc AppUseCase) {
+	h := reflect.ValueOf(uc)
+
+	for i := 0; i < h.NumField(); i++ {
+		handler, ok := h.Field(i).Interface().(cronjob.CronHandler)
+		if ok {
+			// if it implements CronHandler, register it!
+			handler.RegisterCron(c)
+		}
+	}
+}
+
+// registerQueue registers our use cases as queue handler
+// reflect docs: https://golang.org/pkg/reflect/
+func registerQueue(as *queue.AsynqServer, uc AppUseCase) {
+	h := reflect.ValueOf(uc)
+
+	for i := 0; i < h.NumField(); i++ {
+		handler, ok := h.Field(i).Interface().(queue.AsynqServerHandler)
+		if ok {
+			// if it implements QueueHandler, register it!
+			handler.RegisterQueue(as)
+		}
+	}
+}
+
 //================ TYPES =================
 
 // AppUtil wraps utility layer with the app, includes delivery and database
@@ -176,6 +220,9 @@ type AppUtil struct {
 	Redis        redis.Interface
 	Jwt          *jwt.JwtModule
 	Time         *commonTime.Time
+	Asynq        queue.Interface
+	AsynqServer  *queue.AsynqServer
+	Cron         *cronjob.Cron
 }
 
 // AppHttpHandler wraps HTTP handlers exposed by the app as a delivery layer

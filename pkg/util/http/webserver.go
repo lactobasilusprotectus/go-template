@@ -43,7 +43,7 @@ func NewServer(opt config.HttpConfig) *Server {
 	// Cors middleware will handle the OPTIONS method and add the corresponding headers to the response
 	// Logger middleware will write the logs to gin.DefaultWriter even if you set with GIN_MODE=release.
 	// Recovery middleware recovers from any panics and writes a 500 if there was one.
-	g.Use(cors.Default(), gin.Logger(), gin.Recovery())
+	g.Use(cors.Default(), gin.Recovery(), LoggingMiddleware())
 
 	return &Server{
 		port: opt.Port,
