@@ -152,7 +152,7 @@ func initRepoAndUseCases(util AppUtil, cfg config.Config) (repo AppRepo, uc AppU
 	repo.User = userRepository.NewUserRepository(util.DbConnection, util.Time)
 
 	//usecase
-	uc.AuthUseCase = authUsecase.NewAuthUseCase(repo.User, util.Jwt, util.Redis, util.Time, cfg)
+	uc.AuthUseCase = authUsecase.NewAuthUseCase(repo.User, util.Jwt, util.Redis, util.Time, cfg, util.Asynq)
 
 	return repo, uc, nil
 }

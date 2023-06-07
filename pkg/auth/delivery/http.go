@@ -24,6 +24,7 @@ func NewAuthHttpHandler(authMiddleware domain.GinAuthentication, authUseCase dom
 func (a *AuthHttpHandler) Register(g *gin.Engine) {
 	g.POST("login", a.Login)
 	g.POST("register", a.Regis)
+	g.POST("send-email", a.SendEmail)
 }
 
 // Login				godoc
@@ -110,5 +111,35 @@ func (a *AuthHttpHandler) Regis(c *gin.Context) {
 	}
 
 	httputil.WriteOkResponse(c, "Register success")
+	return
+}
+
+func (a *AuthHttpHandler) SendEmail(c *gin.Context) {
+	// init request body
+	var loginRequest common.LoginRequest
+
+	//bind request body
+	if err := c.ShouldBindJSON(&loginRequest); err != nil {
+		httputil.WriteBadRequestResponseWithErrMsg(c, httputil.ResponseBadRequestError, err)
+		return
+	}
+
+	// validate request body
+	if err := validator.New().Struct(&loginRequest); err != nil {
+		httputil.WriteBadRequestResponseWithErrMsg(c, httputil.ResponseBadRequestError, err)
+		return
+	}
+
+	// call use case
+	err := a.authUseCase.SendEmail(c, loginRequest)
+
+	// handle error
+	if err != nil {
+		httputil.WriteServerErrorResponse(c, httputil.ResponseServerError, err)
+		return
+	}
+
+	// write response
+	httputil.WriteOkResponse(c, "Email sent")
 	return
 }

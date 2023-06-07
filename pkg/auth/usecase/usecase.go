@@ -10,6 +10,7 @@ import (
 	commonTime "github.com/lactobasilusprotectus/go-template/pkg/common/time"
 	"github.com/lactobasilusprotectus/go-template/pkg/domain"
 	"github.com/lactobasilusprotectus/go-template/pkg/util/jwt"
+	"github.com/lactobasilusprotectus/go-template/pkg/util/queue"
 	"github.com/lactobasilusprotectus/go-template/pkg/util/redis"
 	"time"
 )
@@ -20,17 +21,19 @@ type AuthUseCase struct {
 	redis     redis.Interface
 	time      commonTime.TimeInterface
 	config    config.Config
+	client    queue.Interface
 }
 
 func NewAuthUseCase(userRepo domain.UserRepository,
 	jwtModule jwt.JwtInterface, redis redis.Interface, time commonTime.TimeInterface,
-	config config.Config) *AuthUseCase {
+	config config.Config, client queue.Interface) *AuthUseCase {
 	return &AuthUseCase{
 		userRepo:  userRepo,
 		jwtModule: jwtModule,
 		redis:     redis,
 		time:      time,
 		config:    config,
+		client:    client,
 	}
 }
 
@@ -108,4 +111,22 @@ func (a *AuthUseCase) generateToken(ctx context.Context, sessionID string, userI
 		Type:       tokenType,
 		Lifetime:   lifeTime,
 	})
+}
+
+func (a *AuthUseCase) SendEmail(ctx context.Context, request common.LoginRequest) (err error) {
+	emailDeliveryTask, err := a.EmailDeliveryTask(ctx, request)
+
+	if err != nil {
+		return err
+	}
+
+	info, err := a.client.EnqueueTask(emailDeliveryTask)
+
+	if err != nil {
+		return fmt.Errorf("something wrong: %w", err)
+	}
+
+	fmt.Println(info)
+
+	return
 }
