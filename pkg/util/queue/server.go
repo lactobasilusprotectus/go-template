@@ -35,7 +35,7 @@ func NewAsynqServer(config config.RedisConfig) *AsynqServer {
 	server := asynq.NewServer(
 		opts,
 		asynq.Config{
-			Concurrency: 10,
+			Concurrency: 100,
 		},
 	)
 

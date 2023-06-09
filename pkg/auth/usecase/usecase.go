@@ -128,5 +128,12 @@ func (a *AuthUseCase) SendEmail(ctx context.Context, request common.LoginRequest
 
 	fmt.Println(info)
 
+	//close connection
+	err = a.client.Close()
+
+	if err != nil {
+		return fmt.Errorf("something wrong: %w", err)
+	}
+
 	return
 }

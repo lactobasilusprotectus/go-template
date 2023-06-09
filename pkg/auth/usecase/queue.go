@@ -15,15 +15,18 @@ func (a *AuthUseCase) RegisterQueue(as *queue.AsynqServer) {
 	as.AddHandlerFunc(common.TypeReminderEmail, a.HandleSendEmail)
 }
 
+// HandleSendEmail is a handler function that sends an email to the user.
 func (a *AuthUseCase) HandleSendEmail(ctx context.Context, task *asynq.Task) error {
 	var p common.LoginRequest
 	if err := json.Unmarshal(task.Payload(), &p); err != nil {
 		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
 	}
 	log.Printf("Sending Email to User: user_id=%s, template_id=%s", p.Email, p.Password)
+
 	return nil
 }
 
+// EmailDeliveryTask creates a task to email the user.
 func (a *AuthUseCase) EmailDeliveryTask(ctx context.Context, request common.LoginRequest) (*asynq.Task, error) {
 	payload, err := json.Marshal(request)
 
